@@ -172,7 +172,7 @@ let INSUMOS = [
   {id:26,tipo:"Insecticida", nombre:"Bifentrin 10%",         unidad:"litros", precio:9},
   {id:27,tipo:"Insecticida", nombre:"Coragen",               unidad:"litros", precio:115},
   {id:28,tipo:"Insecticida", nombre:"Engeo",                 unidad:"litros", precio:30},
-  {id:29,tipo:"Labor",       nombre:"Siembra al voleo",       unidad:"ha",     precio:50},
+  {id:29,tipo:"Labor",       nombre:"Siembra",              unidad:"ha",     precio:50},
   {id:30,tipo:"Labor",       nombre:"Rolo picador",          unidad:"ha",     precio:20.125},
   {id:31,tipo:"Labor",       nombre:"Fertilizacion",           unidad:"ha",     precio:8.5},
   {id:32,tipo:"Labor",       nombre:"Pulverizacion Terrestre", unidad:"ha",     precio:6},
@@ -291,7 +291,10 @@ function calcM(plan){
   const pi = (costosF + fleteEfectivo * plan.rinde / 1000) / ((1 - prod.gc + prod.bonif - cosPct) * plan.rinde / 1000);
   const margen = ingreso - total;
   const alqIndif = alq + margen; // alquiler al que margen = 0
-  const alqIndifQQ = alqIndif * 10 / pbSoja(); // en quintales de soja (1 QQ = 100 kg)
+  // Para doble cultivo cada crop paga ALQ_QQ/2, entonces escalamos ×2
+  // para expresar el alquiler de indiferencia en los mismos términos que el input del campo
+  const esDoble = DOBLES.some(d => d.includes(plan.id));
+  const alqIndifQQ = alqIndif * 10 / pbSoja() * (esDoble ? 2 : 1);
   return {pn, ingreso, impl, costoCosecha, alq, total, margen, pi, ri, alqIndif, alqIndifQQ};
 }
 
@@ -1246,8 +1249,12 @@ function aplicarPeriodo(key){
     // 1) Exacto dentro del tipo
     let ins = insDelTipo.find(i => normNombre(i.nombre) === normC);
     // 2) Parcial: sheet tiene nombre más largo que el insumo
-    //    Ej: "Aceite mso" → "Aceite", "Rizospray CS" → "Rizospray"
-    if(!ins) ins = insDelTipo.find(i => normC.includes(normNombre(i.nombre)));
+    //    Excluye casos donde el concepto empieza con el insumo + espacio (eso lo maneja step 3)
+    if(!ins) ins = insDelTipo.find(i => {
+      const n = normNombre(i.nombre);
+      if(normC.startsWith(n + ' ')) return false; // evita "Siembra al voleo" → "Siembra"
+      return normC.includes(n);
+    });
     // 3) Parcial inverso: insumo empieza con el concepto (mínimo 4 chars para evitar falsos)
     //    Requiere que sea límite de palabra (espacio o fin) para evitar "Siembra" → "Siembra al voleo"
     if(!ins) ins = insDelTipo.find(i => {
